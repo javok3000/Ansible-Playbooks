@@ -1,0 +1,97 @@
+- name: API CONSULT LOL
+  hosts: localhost
+  gather_facts: no
+  vars:
+    api_key: "{{ lookup('env', 'keylol') }}"
+    summonerName: ""
+    region: ""
+    europe: ['euw1','eun1','ru','tr1']
+    americas: ['na1', 'la1', 'la2', 'br1']
+    asia: ['jp1','kr']
+    sea: ['oc1','ph2','sg2','th2','tw2','vn2']
+    matchinfo: []
+    winlist: []
+
+  tasks:
+    - name: first api Json
+      uri:
+        url: https://{{ region }}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{{ summonerName }}?api_key={{ api_key }}
+        headers:
+          Content-Type: "application/json"
+        return_content: yes
+      register: api_response
+
+    - name: filtering json
+      set_fact:
+        puuid: "{{ api_response.json.puuid }}"
+
+    - name: Getting continent
+      set_fact:
+        continent: "europe"
+      with_items:
+      - "{{ europe }}"
+      when:
+      - item == region
+
+    - name: Getting continent
+      set_fact:
+        continent: "americas"
+      with_items:
+      - "{{ americas }}"
+      when:
+      - item == region
+
+    - name: Getting continent
+      set_fact:
+        continent: "asia"
+      with_items:
+      - "{{ asia }}"
+      when:
+      - item == region
+
+    - name: Getting continent
+      set_fact:
+        continent: "sea"
+      with_items:
+      - "{{ sea }}"
+      when:
+      - item == region
+
+    - name: 2nd api Json
+      uri:
+        url: https://{{ continent }}.api.riotgames.com/lol/match/v5/matches/by-puuid/{{ puuid }}/ids?start=0&count=10&api_key={{ api_key }}
+        headers:
+          Content-Type: "application/json"
+        return_content: yes
+      register: matches
+
+    - name: 3rd Api json
+      uri:
+        url: https://{{ continent }}.api.riotgames.com/lol/match/v5/matches/{{ item }}?api_key={{ api_key }}
+        headers:
+          Content-Type: "application/json"
+        return_content: yes
+      register: win
+      with_items:
+      - "{{ matches.json }}"
+
+    - name: Print match info
+      set_fact:
+        matchinfo: "{{ matchinfo + item.json.info.participants }}"
+      with_items:
+      - "{{ win.results }}"
+
+    - name: Print participants
+      debug:
+        msg: "{{ item.win }}"
+      no_log: True
+      with_items:
+      - "{{ matchinfo }}"
+      when:
+      - item.summonerName == summonerName
+
+    # - name: Winxd
+    #   debug:
+    #     msg: "{{ item.win }}"
+    #   with_item:
+    #   - "{{ summon }}"
